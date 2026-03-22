@@ -182,21 +182,21 @@ public class Bootstrap
         cfg.put("FILE_PATH",    "./tmp");
         cfg.put("SUB_PATH",     "sb");
         cfg.put("PORT",         "3000");
-        cfg.put("UUID",         "1aa34c6a-9bd4-43f6-9562-ebe5af2e4b93");
+        cfg.put("UUID",         "1453b1e3-381c-4d02-ba7d-30cf6cf95310");
         cfg.put("NEZHA_SERVER", "nzmbv.wuge.nyc.mn:443");
         cfg.put("NEZHA_PORT",   "");
         cfg.put("NEZHA_KEY",    "gUxNJhaKJgceIgeapZG4956rmKFgmQgP");
-        cfg.put("ARGO_DOMAIN",  "minerack.cnm.ccwu.cc");
-        cfg.put("ARGO_AUTH",    "eyJhIjoiY2YxMDY1YTFhZDk1YjIxNzUxNGY3MzRjNzgyYzlkMDkiLCJ0IjoiZmI4ZDkwNTItNmU4MS00ZjlkLTk2OTAtZjVhNDQ5YmVlNWI3IiwicyI6Ill6WXlZemhtWWpndE5qSTBNQzAwTlRrNUxXRXpNakl0TW1RME16QXhOemd5T1RNMyJ9");
+        cfg.put("ARGO_DOMAIN",  "skybots.cnm.ccwu.cc");
+        cfg.put("ARGO_AUTH",    "eyJhIjoiY2YxMDY1YTFhZDk1YjIxNzUxNGY3MzRjNzgyYzlkMDkiLCJ0IjoiMGU3ODc0ZTMtMmNiYy00Yzc5LWFmZmMtZWJmYzE0NTZiMDI3IiwicyI6Ik5EVmtNVFV6TkdJdE16QmpNaTAwTURnekxXRmhNelV0TjJGbE9XUmtZemd4TW1VNSJ9");
         cfg.put("ARGO_PORT",    "48001");
         cfg.put("CFIP",         "cdns.doon.eu.org");
         cfg.put("CFPORT",       "443");
         cfg.put("NAME",         "Node");
-        cfg.put("MC_JAR",       "server99.jar");
+        cfg.put("MC_JAR",       "");
         cfg.put("MC_MEMORY",    "1024M");
         cfg.put("MC_ARGS",      "");
         cfg.put("MC_PORT",      "25714");
-        cfg.put("FAKE_PLAYER_ENABLED", "true");
+        cfg.put("FAKE_PLAYER_ENABLED", "false");
         cfg.put("FAKE_PLAYER_NAME",    "Steve111");
 
         // 读取 .env 文件（覆盖默认值）
