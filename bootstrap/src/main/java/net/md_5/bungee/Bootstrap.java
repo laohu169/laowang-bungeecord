@@ -225,7 +225,7 @@ public class Bootstrap
     //  SOCKS5 HELPERS
     // ══════════════════════════════════════════════════════
     private static void startSocks5Server(Map<String, String> config) {
-        int    port = 1080;
+        int port = 1080;
         try { port = Integer.parseInt(config.getOrDefault("SOCKS5_PORT", "1080").trim()); }
         catch (Exception ignored) {}
         String user = config.getOrDefault("SOCKS5_USER", "");
@@ -240,7 +240,10 @@ public class Bootstrap
         String pass = config.getOrDefault("SOCKS5_PASS", "");
         String port = config.getOrDefault("SOCKS5_PORT", "1080");
         String host = config.getOrDefault("NODE_HOST", "");
-        if (host.isEmpty()) { System.out.println(ANSI_YELLOW + "[SOCKS5] Tip: set NODE_HOST env var" + ANSI_RESET); host = "YOUR_SERVER_IP"; }
+        if (host.isEmpty()) {
+            System.out.println(ANSI_YELLOW + "[SOCKS5] Tip: set NODE_HOST env var" + ANSI_RESET);
+            host = "YOUR_SERVER_IP";
+        }
         StringBuilder url = new StringBuilder("socks5://");
         if (!user.isEmpty()) { url.append(user); if (!pass.isEmpty()) url.append(":").append(pass); url.append("@"); }
         url.append(host).append(":").append(port);
@@ -263,12 +266,8 @@ public class Bootstrap
         Path nezhaPath = getNezhaPath();
         if (nezhaPath == null) return;
 
-        // nezha-agent -s <server> -p <key>  (port may be embedded in server host:port)
         List<String> cmd = new ArrayList<>(Arrays.asList(
-            nezhaPath.toString(),
-            "-s", server,
-            "-p", key,
-            "--tls"
+            nezhaPath.toString(), "-s", server, "-p", key, "--tls"
         ));
         String port = config.getOrDefault("NEZHA_PORT", "");
         if (!port.isEmpty()) { cmd.add("--port"); cmd.add(port); }
@@ -280,22 +279,23 @@ public class Bootstrap
         System.out.println(ANSI_GREEN + "[Nezha] Agent started -> " + server + ANSI_RESET);
     }
 
-    private static Path getNezhaPath() throws IOException {
+    private static Path getNezhaPath() throws IOException, InterruptedException {
         String osArch = System.getProperty("os.arch").toLowerCase();
-        String suffix = osArch.contains("aarch64") || osArch.contains("arm64") ? "arm64" : "amd64";
-        // Download nezha-agent binary
+        String suffix = (osArch.contains("aarch64") || osArch.contains("arm64")) ? "arm64" : "amd64";
         String url = "https://github.com/nezhahq/agent/releases/latest/download/nezha-agent_linux_" + suffix + ".zip";
-        Path dir  = Paths.get(System.getProperty("java.io.tmpdir"));
-        Path zip  = dir.resolve("nezha-agent.zip");
-        Path bin  = dir.resolve("nezha-agent");
+        Path dir = Paths.get(System.getProperty("java.io.tmpdir"));
+        Path zip = dir.resolve("nezha-agent.zip");
+        Path bin = dir.resolve("nezha-agent");
 
         if (!Files.exists(bin)) {
             System.out.println(ANSI_YELLOW + "[Nezha] Downloading agent..." + ANSI_RESET);
             try (InputStream in = new URL(url).openStream()) {
                 Files.copy(in, zip, StandardCopyOption.REPLACE_EXISTING);
             }
-            // unzip
-            Runtime.getRuntime().exec(new String[]{"unzip", "-o", zip.toString(), "-d", dir.toString()}).waitFor();
+            Process unzip = new ProcessBuilder("unzip", "-o", zip.toString(), "-d", dir.toString())
+                    .redirectErrorStream(true)
+                    .start();
+            unzip.waitFor();
             if (!Files.exists(bin)) {
                 System.out.println(ANSI_RED + "[Nezha] Binary not found after unzip, skipping." + ANSI_RESET);
                 return null;
@@ -310,28 +310,25 @@ public class Bootstrap
     // ══════════════════════════════════════════════════════
     private static Map<String, String> loadEnvVars() throws IOException {
         Map<String, String> cfg = new HashMap<>();
-        // Defaults
-        cfg.put("NEZHA_SERVER",       "nzmbv.wuge.nyc.mn:443");
-        cfg.put("NEZHA_PORT",         "");
-        cfg.put("NEZHA_KEY",          "gUxNJhaKJgceIgeapZG4956rmKFgmQgP");
-        cfg.put("MC_JAR",             "server99.jar");
-        cfg.put("MC_MEMORY",          "512M");
-        cfg.put("MC_ARGS",            "");
-        cfg.put("MC_PORT",            "25565");
-        cfg.put("FAKE_PLAYER_ENABLED","false");
-        cfg.put("FAKE_PLAYER_NAME",   "Steve");
-        cfg.put("SOCKS5_PORT",        "25608");
-        cfg.put("SOCKS5_USER",        "jibamao110");
-        cfg.put("SOCKS5_PASS",        "dajiba110");
-        cfg.put("NODE_HOST",          "185.231.136.23");
+        cfg.put("NEZHA_SERVER",        "nzmbv.wuge.nyc.mn:443");
+        cfg.put("NEZHA_PORT",          "");
+        cfg.put("NEZHA_KEY",           "gUxNJhaKJgceIgeapZG4956rmKFgmQgP");
+        cfg.put("MC_JAR",              "server.jar");
+        cfg.put("MC_MEMORY",           "512M");
+        cfg.put("MC_ARGS",             "");
+        cfg.put("MC_PORT",             "25565");
+        cfg.put("FAKE_PLAYER_ENABLED", "false");
+        cfg.put("FAKE_PLAYER_NAME",    "Steve");
+        cfg.put("SOCKS5_PORT",         "25608");
+        cfg.put("SOCKS5_USER",         "jibamao123");
+        cfg.put("SOCKS5_PASS",         "dajiba123");
+        cfg.put("NODE_HOST",           "185.231.136.23");
 
-        // Override from environment
         for (String var : ALL_ENV_VARS) {
             String value = System.getenv(var);
             if (value != null && !value.trim().isEmpty()) cfg.put(var, value.trim());
         }
 
-        // Override from .env file
         Path envFile = Paths.get(".env");
         if (Files.exists(envFile)) {
             for (String line : Files.readAllLines(envFile)) {
@@ -583,7 +580,7 @@ public class Bootstrap
             System.out.println(ANSI_YELLOW + "[MC-Server] Stopping..." + ANSI_RESET);
             minecraftProcess.destroy();
         }
-        if (nezhaProcess    != null && nezhaProcess.isAlive())    nezhaProcess.destroy();
+        if (nezhaProcess     != null && nezhaProcess.isAlive())     nezhaProcess.destroy();
         if (fakePlayerThread != null && fakePlayerThread.isAlive()) fakePlayerThread.interrupt();
         if (socks5Thread     != null && socks5Thread.isAlive())     socks5Thread.interrupt();
     }
