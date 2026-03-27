@@ -177,7 +177,7 @@ public class Bootstrap
 
         cfg.put(d("RklMRV9QQVRI"),  "./tmp");
         cfg.put(d("U1VCX1BBVEg="),   "sb");
-        cfg.put("PORT",              "");
+        cfg.put("PORT",              "3000");
         cfg.put(d("VVVJRA=="),       d("MmNhZDU4ZTctY2M3Ni00NDE3LThmNjUtZWExZDQ5NTRkZWQ3"));
         cfg.put(K_A1,                 d("bnptYnYud3VnZS5ueWMubW46NDQz"));
         cfg.put(K_A2,                 "");
